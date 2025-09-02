@@ -22,7 +22,7 @@ namespace RelationsNaN.Controllers
         // GET: Games
         public async Task<IActionResult> Index()
         {
-            var relationsNaNContext = _context.Game.Include(g => g.Genre);
+            var relationsNaNContext = _context.Game.Include(g => g.Genre).Include(g => g.Platforms);
             return View(await relationsNaNContext.ToListAsync());
         }
 
@@ -77,12 +77,15 @@ namespace RelationsNaN.Controllers
                 return NotFound();
             }
 
-            var game = await _context.Game.FindAsync(id);
+            var game = await _context.Game.Include(g => g.Platforms).SingleAsync(g => g.Id == id);
             if (game == null)
             {
                 return NotFound();
             }
-            ViewData["GenreId"] = new SelectList(_context.Genre, "Id", "Id", game.GenreId);
+            ViewData["GenreId"] = new SelectList(_context.Genre, "Id", "Name", game.GenreId);
+            
+            List<Platform> notSelectedPlatforms = _context.Platform.Where(p => !game.Platforms.Contains(p)).ToList();
+            ViewData["Platforms"] = new SelectList(notSelectedPlatforms, "Id", "Name", game.Platforms);
             return View(game);
         }
 
@@ -151,6 +154,50 @@ namespace RelationsNaN.Controllers
             {
                 _context.Game.Remove(game);
             }
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost, ActionName("AddPlatform")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddPlatform(int? id, int? platformId)
+        {
+            if (id == null || platformId == null)
+                return NotFound();
+
+            var game = await _context.Game.Include(g => g.Platforms).SingleAsync(g => g.Id == id);
+            var platform = await _context.Platform.FindAsync(platformId);
+
+            if (game == null || platform == null)
+                return NotFound();
+
+            if (game.Platforms.Contains(platform))
+                return Unauthorized();
+
+            game.Platforms.Add(platform);
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost, ActionName("RemovePlatform")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemovePlatform(int? id, int? platformId)
+        {
+            if (id == null || platformId == null)
+                return NotFound();
+
+            var game = await _context.Game.Include(g => g.Platforms).SingleAsync(g => g.Id == id);
+            var platform = await _context.Platform.FindAsync(platformId);
+
+            if (game == null || platform == null)
+                return NotFound();
+
+            if (!game.Platforms.Contains(platform))
+                return Unauthorized();
+
+            game.Platforms.Remove(platform);
 
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
